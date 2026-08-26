@@ -1,0 +1,137 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import LangToggle from '../../../components/LangToggle.astro';
+import {
+  getLogicalArticles,
+  getLogicalArticle,
+  pickVersion,
+} from '../../../lib/articles';
+
+export async function getStaticPaths() {
+  const articles = await getLogicalArticles();
+  return articles.map((article) => ({
+    params: { category: article.category, slug: article.slug },
+  }));
+}
+
+const { category, slug } = Astro.params;
+if (!category || !slug) throw new Error('Missing article params');
+
+const article = await getLogicalArticle(category, slug);
+if (!article) throw new Error(`Article not found: ${category}/${slug}`);
+
+// Build-time default is Chinese when available; client script honors ?lang=.
+const { entry: defaultEntry, lang: defaultLang } = pickVersion(article, 'zh');
+
+const zhEntry = article.versions.zh;
+const enEntry = article.versions.en;
+
+const ZhContent = zhEntry ? (await render(zhEntry)).Content : null;
+const EnContent = enEntry ? (await render(enEntry)).Content : null;
+const MonoContent = !article.bilingual ? (await render(defaultEntry)).Content : null;
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+const pageTitle = defaultEntry.data.title;
+---
+
+<BaseLayout title={pageTitle} description={article.summary}>
+  <a class="back-link" href={`/category/${category}/`}>← {category}</a>
+
+  <h1
+    class="page-title"
+    data-article-title
+    data-lang-zh={zhEntry?.data.title ?? ''}
+    data-lang-en={enEntry?.data.title ?? ''}
+  >
+    {pageTitle}
+  </h1>
+
+  <div class="article-meta">
+    <time datetime={defaultEntry.data.date.toISOString()}>{formatDate(defaultEntry.data.date)}</time>
+    <span>{category}</span>
+    {article.bilingual && <span class="badge">双语</span>}
+  </div>
+
+  <div class="article-toolbar">
+    {article.bilingual && <LangToggle activeLang={defaultLang} />}
+    {
+      article.source && (
+        <a class="source-link" href={article.source} target="_blank" rel="noopener noreferrer">
+          查看来源
+        </a>
+      )
+    }
+  </div>
+
+  {
+    article.bilingual ? (
+      <div class="article-versions" data-bilingual="true">
+        {ZhContent && (
+          <article class="prose" data-version="zh" hidden={defaultLang !== 'zh'}>
+            <ZhContent />
+          </article>
+        )}
+        {EnContent && (
+          <article class="prose" data-version="en" hidden={defaultLang !== 'en'}>
+            <EnContent />
+          </article>
+        )}
+      </div>
+    ) : (
+      MonoContent && (
+        <article class="prose">
+          <MonoContent />
+        </article>
+      )
+    )
+  }
+</BaseLayout>
+
+{
+  article.bilingual && (
+    <script>
+      function resolveLang(): 'zh' | 'en' {
+        const value = new URL(window.location.href).searchParams.get('lang');
+        return value === 'en' ? 'en' : 'zh';
+      }
+
+      function applyLang(lang: 'zh' | 'en') {
+        document.querySelectorAll('[data-version]').forEach((node) => {
+          const el = node as HTMLElement;
+          el.hidden = el.dataset.version !== lang;
+        });
+
+        document.querySelectorAll('.lang-toggle button[data-lang]').forEach((node) => {
+          const button = node as HTMLButtonElement;
+          button.setAttribute('aria-pressed', button.dataset.lang === lang ? 'true' : 'false');
+        });
+
+        const title = document.querySelector('[data-article-title]') as HTMLElement | null;
+        if (title) {
+          const next = lang === 'en' ? title.dataset.langEn : title.dataset.langZh;
+          if (next) {
+            title.textContent = next;
+            document.title = `${next} · 阅读收藏`;
+          }
+        }
+      }
+
+      applyLang(resolveLang());
+
+      document.querySelectorAll('.lang-toggle button[data-lang]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const lang = (button as HTMLButtonElement).dataset.lang;
+          if (lang !== 'zh' && lang !== 'en') return;
+          const url = new URL(window.location.href);
+          url.searchParams.set('lang', lang);
+          history.replaceState({}, '', url.toString());
+          applyLang(lang);
+        });
+      });
+    </script>
+  )
+}

@@ -1,0 +1,26 @@
+---
+import { getCategories } from '../lib/articles';
+
+const categories = await getCategories();
+const currentPath = Astro.url.pathname;
+---
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="site-logo" href="/">阅读收藏</a>
+    <nav class="site-nav" aria-label="分类">
+      {
+        categories.map((cat) => {
+          const href = `/category/${cat.name}/`;
+          const current =
+            currentPath === href || currentPath === `/category/${cat.name}`;
+          return (
+            <a href={href} aria-current={current ? 'page' : undefined}>
+              {cat.name}
+            </a>
+          );
+        })
+      }
+    </nav>
+  </div>
+</header>

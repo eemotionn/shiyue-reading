@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCategories, getLogicalArticles } from '../../lib/articles';
+
+export async function getStaticPaths() {
+  const categories = await getCategories();
+  return categories.map((cat) => ({
+    params: { category: cat.name },
+  }));
+}
+
+const { category } = Astro.params;
+if (!category) throw new Error('Missing category param');
+
+const articles = await getLogicalArticles(category);
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+---
+
+<BaseLayout title={category} description={`${category} 分类下的文章列表`}>
+  <a class="back-link" href="/">← 全部分类</a>
+  <h1 class="page-title">{category}</h1>
+  <p class="page-lead">共 {articles.length} 篇</p>
+
+  {
+    articles.length === 0 ? (
+      <p class="empty">该分类暂无文章。</p>
+    ) : (
+      <ul class="article-list">
+        {articles.map((article) => (
+          <li class="article-item">
+            <div class="article-meta">
+              <time datetime={article.date.toISOString()}>{formatDate(article.date)}</time>
+              {article.bilingual && <span class="badge">双语</span>}
+            </div>
+            <h2>
+              <a href={`/article/${article.category}/${article.slug}/`}>{article.title}</a>
+            </h2>
+            {article.summary && <p class="article-summary">{article.summary}</p>}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</BaseLayout>

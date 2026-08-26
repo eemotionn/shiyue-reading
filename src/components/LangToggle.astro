@@ -1,0 +1,16 @@
+---
+interface Props {
+  activeLang: 'zh' | 'en';
+}
+
+const { activeLang } = Astro.props;
+---
+
+<div class="lang-toggle" role="group" aria-label="语言切换">
+  <button type="button" data-lang="zh" aria-pressed={activeLang === 'zh' ? 'true' : 'false'}
+    >译文</button
+  >
+  <button type="button" data-lang="en" aria-pressed={activeLang === 'en' ? 'true' : 'false'}
+    >原文</button
+  >
+</div>
