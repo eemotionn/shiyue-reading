@@ -1,0 +1,57 @@
+---
+import ArticleList from '../components/ArticleList.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getLogicalArticles } from '../lib/articles';
+
+const articles = await getLogicalArticles();
+---
+
+<BaseLayout title="全部文章" description="按更新时间浏览全部收藏文章。">
+  <a class="back-link" href="/">← 首页</a>
+  <h1 class="page-title">全部文章</h1>
+  <p class="page-lead">共 {articles.length} 篇，按更新时间排列。</p>
+  <form class="search-form" role="search" data-article-search>
+    <label for="article-search">搜索文章</label>
+    <div class="search-form__row">
+      <input id="article-search" name="q" type="search" placeholder="搜索标题、摘要或正文" autocomplete="off" />
+      <button type="submit">搜索</button>
+    </div>
+    <p class="search-form__status" data-search-status aria-live="polite"></p>
+  </form>
+  <ArticleList articles={articles} emptyMessage="还没有文章。" searchable />
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-article-search]');
+  const input = document.querySelector<HTMLInputElement>('#article-search');
+  const status = document.querySelector<HTMLElement>('[data-search-status]');
+  const items = Array.from(document.querySelectorAll<HTMLElement>('.article-item[data-search-text]'));
+
+  if (form && input && status) {
+    const update = (rawQuery: string, updateUrl = true) => {
+      const query = rawQuery.trim().toLocaleLowerCase();
+      let visible = 0;
+      items.forEach((item) => {
+        const matches = !query || (item.dataset.searchText ?? '').includes(query);
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      status.textContent = query ? `找到 ${visible} 篇文章` : `共 ${items.length} 篇文章`;
+      if (updateUrl) {
+        const url = new URL(window.location.href);
+        if (query) url.searchParams.set('q', rawQuery.trim());
+        else url.searchParams.delete('q');
+        history.replaceState({}, '', url.toString());
+      }
+    };
+
+    const initialQuery = new URL(window.location.href).searchParams.get('q') ?? '';
+    input.value = initialQuery;
+    update(initialQuery, false);
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      update(input.value);
+    });
+    input.addEventListener('input', () => update(input.value));
+  }
+</script>

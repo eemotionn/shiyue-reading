@@ -3,6 +3,8 @@ import { render } from 'astro:content';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import LangToggle from '../../../components/LangToggle.astro';
 import {
+  articleHref,
+  categoryHref,
   getLogicalArticles,
   getLogicalArticle,
   pickVersion,
@@ -36,10 +38,14 @@ function formatDate(date: Date) {
 }
 
 const pageTitle = defaultEntry.data.title;
+const allInCategory = await getLogicalArticles(category);
+const articleIndex = allInCategory.findIndex((item) => item.slug === article.slug);
+const previousArticle = articleIndex < allInCategory.length - 1 ? allInCategory[articleIndex + 1] : undefined;
+const nextArticle = articleIndex > 0 ? allInCategory[articleIndex - 1] : undefined;
 ---
 
 <BaseLayout title={pageTitle} description={article.summary}>
-  <a class="back-link" href={`/category/${category}/`}>← {category}</a>
+  <a class="back-link" href={categoryHref(category)}>← {category}</a>
 
   <h1
     class="page-title"
@@ -89,14 +95,31 @@ const pageTitle = defaultEntry.data.title;
       )
     )
   }
-</BaseLayout>
-
 {
   article.bilingual && (
     <script>
+      const languagePreferenceKey = 'reading-collection-lang';
+
+      function readLanguagePreference(): 'zh' | 'en' {
+        try {
+          return window.localStorage.getItem(languagePreferenceKey) === 'en' ? 'en' : 'zh';
+        } catch {
+          return 'zh';
+        }
+      }
+
+      function saveLanguagePreference(lang: 'zh' | 'en') {
+        try {
+          window.localStorage.setItem(languagePreferenceKey, lang);
+        } catch {
+          // The URL still preserves the selection when storage is unavailable.
+        }
+      }
+
       function resolveLang(): 'zh' | 'en' {
         const value = new URL(window.location.href).searchParams.get('lang');
-        return value === 'en' ? 'en' : 'zh';
+        if (value === 'en' || value === 'zh') return value;
+        return readLanguagePreference();
       }
 
       function applyLang(lang: 'zh' | 'en') {
@@ -118,6 +141,8 @@ const pageTitle = defaultEntry.data.title;
             document.title = `${next} · 阅读收藏`;
           }
         }
+        document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+        saveLanguagePreference(lang);
       }
 
       applyLang(resolveLang());
@@ -135,3 +160,23 @@ const pageTitle = defaultEntry.data.title;
     </script>
   )
 }
+
+<nav class="article-pagination" aria-label="文章导航">
+  {
+    previousArticle ? (
+      <a class="article-pagination__link article-pagination__link--previous" href={articleHref(previousArticle)}>
+        <span>上一篇</span>
+        <strong>{previousArticle.title}</strong>
+      </a>
+    ) : <span />
+  }
+  {
+    nextArticle ? (
+      <a class="article-pagination__link article-pagination__link--next" href={articleHref(nextArticle)}>
+        <span>下一篇</span>
+        <strong>{nextArticle.title}</strong>
+      </a>
+    ) : <span />
+  }
+</nav>
+</BaseLayout>

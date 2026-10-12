@@ -1,5 +1,5 @@
 ---
-import { getCategories } from '../lib/articles';
+import { categoryHref, getCategories } from '../lib/articles';
 
 const categories = await getCategories();
 const currentPath = Astro.url.pathname;
@@ -9,11 +9,17 @@ const currentPath = Astro.url.pathname;
   <div class="site-header__inner">
     <a class="site-logo" href="/">阅读收藏</a>
     <nav class="site-nav" aria-label="分类">
+      <a href="/articles/" aria-current={currentPath === '/articles/' ? 'page' : undefined}>
+        全部文章
+      </a>
       {
         categories.map((cat) => {
-          const href = `/category/${cat.name}/`;
+          const href = categoryHref(cat.name);
+          const articlePrefix = `/article/${encodeURIComponent(cat.name)}/`;
           const current =
-            currentPath === href || currentPath === `/category/${cat.name}`;
+            currentPath === href ||
+            currentPath === href.slice(0, -1) ||
+            currentPath.startsWith(articlePrefix);
           return (
             <a href={href} aria-current={current ? 'page' : undefined}>
               {cat.name}

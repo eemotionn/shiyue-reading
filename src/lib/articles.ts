@@ -9,12 +9,23 @@ export type LogicalArticle = {
   date: Date;
   summary?: string;
   source?: string;
+  searchText: string;
   bilingual: boolean;
   versions: {
     zh?: ArticleEntry;
     en?: ArticleEntry;
   };
 };
+
+const SAFE_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function assertSafeSegment(value: string, field: string, entryId: string): void {
+  if (!SAFE_SEGMENT.test(value)) {
+    throw new Error(
+      `${field} for ${entryId} must contain only lowercase letters, numbers, and single hyphens: "${value}"`,
+    );
+  }
+}
 
 /** Parse category and filename stem from collection id like `agent/intro-to-agents.zh`. */
 export function parseArticleId(id: string): { category: string; stem: string } {
@@ -28,20 +39,18 @@ export function parseArticleId(id: string): { category: string; stem: string } {
   return { category, stem };
 }
 
-function entrySlug(entry: ArticleEntry): string {
-  if (entry.data.pair) return entry.data.pair;
-  return parseArticleId(entry.id).stem;
-}
-
 export async function getAllEntries(): Promise<ArticleEntry[]> {
   const entries = await getCollection('articles');
   for (const entry of entries) {
-    const { category } = parseArticleId(entry.id);
+    const { category, stem } = parseArticleId(entry.id);
     if (entry.data.category !== category) {
       throw new Error(
         `Category mismatch for ${entry.id}: frontmatter "${entry.data.category}" vs directory "${category}"`,
       );
     }
+    assertSafeSegment(category, 'Category', entry.id);
+    assertSafeSegment(stem, 'Filename stem', entry.id);
+    if (entry.data.pair) assertSafeSegment(entry.data.pair, 'Pair', entry.id);
   }
   return entries;
 }
@@ -53,12 +62,36 @@ export async function getLogicalArticles(category?: string): Promise<LogicalArti
     : entries;
 
   const map = new Map<string, LogicalArticle>();
+  const pairLanguages = new Map<string, Set<'zh' | 'en'>>();
+
+  for (const entry of filtered) {
+    if (!entry.data.pair) continue;
+    const key = `${entry.data.category}::${entry.data.pair}`;
+    const languages = pairLanguages.get(key) ?? new Set<'zh' | 'en'>();
+    if (languages.has(entry.data.lang)) {
+      throw new Error(
+        `Duplicate ${entry.data.lang} version for ${entry.data.category}/${entry.data.pair}`,
+      );
+    }
+    languages.add(entry.data.lang);
+    pairLanguages.set(key, languages);
+  }
 
   for (const entry of filtered) {
     const cat = entry.data.category;
-    const slug = entrySlug(entry);
+    const pairKey = entry.data.pair ? `${cat}::${entry.data.pair}` : undefined;
+    const isCompletePair = pairKey ? pairLanguages.get(pairKey)?.size === 2 : false;
+    const slug = isCompletePair && entry.data.pair
+      ? entry.data.pair
+      : parseArticleId(entry.id).stem;
     const key = `${cat}::${slug}`;
     let logical = map.get(key);
+
+    if (logical && !isCompletePair) {
+      throw new Error(
+        `Duplicate article route ${cat}/${slug}; add a shared pair to intentional bilingual versions`,
+      );
+    }
 
     if (!logical) {
       logical = {
@@ -68,13 +101,18 @@ export async function getLogicalArticles(category?: string): Promise<LogicalArti
         date: entry.data.date,
         summary: entry.data.summary,
         source: entry.data.source,
+        searchText: `${entry.data.title} ${entry.data.category} ${entry.data.summary ?? ''} ${entry.body ?? ''}`,
         bilingual: false,
         versions: {},
       };
       map.set(key, logical);
     }
 
+    if (logical.versions[entry.data.lang]) {
+      throw new Error(`Duplicate ${entry.data.lang} article route: ${cat}/${slug}`);
+    }
     logical.versions[entry.data.lang] = entry;
+    logical.searchText += ` ${entry.body ?? ''} ${entry.data.title} ${entry.data.summary ?? ''}`;
 
     if (entry.data.lang === 'zh') {
       logical.title = entry.data.title;
@@ -98,6 +136,14 @@ export async function getLogicalArticles(category?: string): Promise<LogicalArti
   }
 
   return [...map.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+export function categoryHref(category: string): string {
+  return `/category/${encodeURIComponent(category)}/`;
+}
+
+export function articleHref(article: Pick<LogicalArticle, 'category' | 'slug'>): string {
+  return `/article/${encodeURIComponent(article.category)}/${encodeURIComponent(article.slug)}/`;
 }
 
 export async function getLogicalArticle(

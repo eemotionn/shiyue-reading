@@ -1,8 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getCategories } from '../lib/articles';
+import ArticleList from '../components/ArticleList.astro';
+import { categoryHref, getCategories, getLogicalArticles } from '../lib/articles';
 
 const categories = await getCategories();
+const latestArticles = (await getLogicalArticles()).slice(0, 6);
 ---
 
 <BaseLayout title="阅读收藏" description="按分类浏览想读的文章，国外文可切换原文与译文。">
@@ -11,20 +13,35 @@ const categories = await getCategories();
     按分类收纳想读的文章。国外文章提供原文与中文译文，可在阅读页一键切换；国内文章仅保留中文版。
   </p>
 
-  {
-    categories.length === 0 ? (
-      <p class="empty">还没有分类。在 <code>src/content/articles/</code> 下添加 Markdown 即可。</p>
-    ) : (
-      <ul class="card-grid">
-        {categories.map((cat) => (
-          <li>
-            <a class="card" href={`/category/${cat.name}/`}>
-              <h2 class="card__title">{cat.name}</h2>
-              <p class="card__meta">{cat.count} 篇</p>
-            </a>
-          </li>
-        ))}
-      </ul>
-    )
-  }
+  <section class="page-section" aria-labelledby="categories-title">
+    <div class="section-heading">
+      <h2 id="categories-title">文章分类</h2>
+      <a href="/articles/">查看全部文章</a>
+    </div>
+
+    {
+      categories.length === 0 ? (
+        <p class="empty">还没有分类。在 <code>src/content/articles/</code> 下添加 Markdown 即可。</p>
+      ) : (
+        <ul class="card-grid">
+          {categories.map((cat) => (
+            <li>
+              <a class="card" href={categoryHref(cat.name)}>
+                <h3 class="card__title">{cat.name}</h3>
+                <p class="card__meta">{cat.count} 篇</p>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </section>
+
+  <section class="page-section" aria-labelledby="latest-title">
+    <div class="section-heading">
+      <h2 id="latest-title">最近更新</h2>
+      <a href="/articles/">全部文章</a>
+    </div>
+    <ArticleList articles={latestArticles} emptyMessage="还没有文章。" />
+  </section>
 </BaseLayout>

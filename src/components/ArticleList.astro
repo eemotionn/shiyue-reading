@@ -1,0 +1,40 @@
+---
+import { articleHref, type LogicalArticle } from '../lib/articles';
+
+interface Props {
+  articles: LogicalArticle[];
+  emptyMessage?: string;
+  searchable?: boolean;
+}
+
+const { articles, emptyMessage = '暂无文章。', searchable = false } = Astro.props;
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+---
+
+{
+  articles.length === 0 ? (
+    <p class="empty">{emptyMessage}</p>
+  ) : (
+    <ul class="article-list">
+      {articles.map((article) => (
+        <li
+          class="article-item"
+          data-search-text={searchable ? article.searchText.toLocaleLowerCase() : undefined}
+        >
+          <div class="article-meta">
+            <time datetime={article.date.toISOString()}>{formatDate(article.date)}</time>
+            <span>{article.category}</span>
+            {article.bilingual && <span class="badge">双语</span>}
+          </div>
+          <h2>
+            <a href={articleHref(article)}>{article.title}</a>
+          </h2>
+          {article.summary && <p class="article-summary">{article.summary}</p>}
+        </li>
+      ))}
+    </ul>
+  )
+}
